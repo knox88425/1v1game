@@ -363,9 +363,15 @@ function placeBuild() {
     mesh.geometry.center();
   }
   mesh.position.copy(pos);
-  if (S.piece===0||S.piece===2){
+  if (S.piece===0) {
+    // Snap wall to nearest 90-degree cardinal — always grid-aligned, facing player
     const d=new THREE.Vector3(); camera.getWorldDirection(d);
-    mesh.rotation.y=Math.atan2(d.x,d.z)+(S.piece===2?Math.PI:0);
+    const raw=Math.atan2(d.x,d.z);
+    mesh.rotation.y = Math.round(raw/(Math.PI/2))*(Math.PI/2);
+  }
+  if (S.piece===2) {
+    const d=new THREE.Vector3(); camera.getWorldDirection(d);
+    mesh.rotation.y=Math.atan2(d.x,d.z);
   }
   mesh.castShadow=true; mesh.receiveShadow=true;
   scene.add(mesh); collidables.push(mesh);
@@ -384,9 +390,14 @@ function updateGhost() {
   if (!S.buildMode||!ghostMesh) return;
   const pos=getBuildPos(); ghostMesh.position.copy(pos);
   ghostMesh.visible=true;
-  if(S.piece===0||S.piece===2){
+  if(S.piece===0){
     const d=new THREE.Vector3(); camera.getWorldDirection(d);
-    ghostMesh.rotation.y=Math.atan2(d.x,d.z)+(S.piece===2?Math.PI:0);
+    const raw=Math.atan2(d.x,d.z);
+    ghostMesh.rotation.y=Math.round(raw/(Math.PI/2))*(Math.PI/2);
+  }
+  if(S.piece===2){
+    const d=new THREE.Vector3(); camera.getWorldDirection(d);
+    ghostMesh.rotation.y=Math.atan2(d.x,d.z);
   }
 }
 
@@ -531,14 +542,33 @@ function updatePlayer(dt) {
 
   if(playerObj.position.y<1.7){ playerObj.position.y=1.7; S.vel.y=0; S.onGround=true; }
 
-  // Step-up on boxes
+  // Solid collision: step-up if coming from above, push out horizontally otherwise
+  const PR = 0.4; // player radius
+  const PH = 1.7; // player eye height (feet at pos.y - PH)
   collidables.forEach(p=>{
-    if(!p.geometry||p.geometry.type==='ExtrudeGeometry')return;
+    if(!p.geometry||p.geometry.type==='ExtrudeGeometry') return;
     const bb=new THREE.Box3().setFromObject(p);
+    const feet=playerObj.position.y-PH;
+    const head=playerObj.position.y+0.1;
     const px=playerObj.position.x, pz=playerObj.position.z;
-    if(px>bb.min.x-.35&&px<bb.max.x+.35&&pz>bb.min.z-.35&&pz<bb.max.z+.35){
-      const top=bb.max.y+1.7;
-      if(playerObj.position.y<top+.6){ playerObj.position.y=top; S.vel.y=0; S.onGround=true; }
+    // broad-phase: ignore if clearly outside
+    if(px<bb.min.x-PR||px>bb.max.x+PR||pz<bb.min.z-PR||pz>bb.max.z+PR) return;
+    if(feet>bb.max.y||head<bb.min.y) return;
+    // overlapping — decide axis
+    const overlapY = bb.max.y - feet; // how far up we'd need to push
+    const overlapX = Math.min(px-bb.min.x+PR, bb.max.x-px+PR);
+    const overlapZ = Math.min(pz-bb.min.z+PR, bb.max.z-pz+PR);
+    if(overlapY > 0 && overlapY < 0.7 && S.vel.y <= 0){
+      // step up onto top
+      playerObj.position.y = bb.max.y + PH;
+      S.vel.y = 0; S.onGround = true;
+    } else {
+      // push out on smallest horizontal axis
+      if(overlapX < overlapZ){
+        playerObj.position.x += (px < (bb.min.x+bb.max.x)/2 ? -overlapX : overlapX);
+      } else {
+        playerObj.position.z += (pz < (bb.min.z+bb.max.z)/2 ? -overlapZ : overlapZ);
+      }
     }
   });
 
