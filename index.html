@@ -653,22 +653,17 @@ function updateBuildHud() {
 }
 
 // ─── FULLSCREEN ────────────────────────────────────────────────────────────
+// Use document.body (not documentElement) so it works inside Google Sites
+// iframes — they pass allowfullscreen on the iframe element itself.
 const fsBtn=document.getElementById('fs-btn');
-fsBtn.addEventListener('click', () => {
-  const el=document.documentElement;
-  const req=el.requestFullscreen||el.mozRequestFullScreen||el.webkitRequestFullscreen||el.msRequestFullscreen;
-  const exit=document.exitFullscreen||document.mozCancelFullScreen||document.webkitExitFullscreen||document.msExitFullscreen;
-  if(!document.fullscreenElement&&!document.webkitFullscreenElement){
-    if(req) req.call(el);
-    fsBtn.textContent='✕';
-  } else {
-    if(exit) exit.call(document);
-    fsBtn.textContent='⛶';
-  }
-});
-document.addEventListener('fullscreenchange', ()=>{
-  fsBtn.textContent=document.fullscreenElement?'✕':'⛶';
-  resize();
+
+function isFS(){return!!(document.fullscreenElement||document.webkitFullscreenElement||document.mozFullScreenElement);}
+function enterFS(){const el=document.body;(el.requestFullscreen||el.mozRequestFullScreen||el.webkitRequestFullscreen||el.msRequestFullscreen||function(){}).call(el);}
+function exitFS(){(document.exitFullscreen||document.mozCancelFullScreen||document.webkitExitFullscreen||document.msExitFullscreen||function(){}).call(document);}
+
+fsBtn.addEventListener('click',()=>{isFS()?exitFS():enterFS();});
+['fullscreenchange','webkitfullscreenchange','mozfullscreenchange'].forEach(ev=>{
+  document.addEventListener(ev,()=>{fsBtn.textContent=isFS()?'✕':'⛶';resize();});
 });
 
 // ─── FOCUS OVERLAY ─────────────────────────────────────────────────────────
